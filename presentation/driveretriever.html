@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tìm kiếm video · DriveRetriever</title>
+  <style>
+    body{font:16px/1.5 system-ui,sans-serif;max-width:1100px;margin:32px auto;padding:0 20px;background:#f5f7fa;color:#182033}
+    h1{font-size:28px} section,article{background:white;border:1px solid #d9deea;border-radius:12px;padding:20px;margin:16px 0}
+    label{display:block;margin:12px 0 5px} input,textarea,select,button{font:inherit;padding:9px;border:1px solid #adb7ca;border-radius:6px}
+    input,textarea{box-sizing:border-box;width:100%} button{background:#234bbc;color:white;cursor:pointer;margin:6px 4px 6px 0}
+    button:disabled{opacity:.5;cursor:default} .row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.row>div{flex:1;min-width:140px}
+    .muted{color:#586479;font-size:14px} #message{white-space:pre-wrap;color:#8b2727} video{width:100%;max-height:420px;background:#111}
+    details{margin:12px 0} .notice{background:#fff4cf;padding:12px;border-radius:6px} textarea{min-height:130px}
+  </style>
+</head>
+<body>
+  <h1>Tìm cảnh trong video</h1>
+  <p class="notice">Video nguồn chưa làm mờ. Chỉ xem và sử dụng trong phạm vi được cấp quyền.</p>
+  <p id="message" role="status" aria-live="polite"></p>
+  <details><summary>Đăng nhập bằng token truy cập</summary><label for="token">Token do hệ thống đăng nhập cấp</label><input id="token" type="password" autocomplete="off"></details>
+  <section>
+    <form id="searchForm">
+      <label for="index">Index</label><input id="index" value="scenes_production">
+      <label for="query">Mô tả cảnh bằng tiếng Việt hoặc tiếng Anh</label><input id="query" required maxlength="1000" placeholder="Một người đi bộ băng qua đường">
+      <div class="row"><div><label for="videoFilter">Video (tùy chọn)</label><input id="videoFilter"></div><div><label for="cameraFilter">Camera (tùy chọn)</label><input id="cameraFilter" disabled></div></div>
+      <button type="submit">Tìm kiếm / tinh chỉnh</button><button type="button" id="newSession">Phiên mới</button>
+    </form>
+    <p class="muted" id="sessionInfo"></p>
+    <details><summary>Mở lại phiên và kết quả</summary><label for="sessionId">Mã phiên</label><input id="sessionId"><label for="runId">Mã lượt tìm kiếm</label><input id="runId"><button id="reopen">Mở lại</button></details>
+  </section>
+  <section><div class="row"><div><label for="setName">Tên tập kết quả</label><input id="setName" value="Cảnh đã xác nhận"></div><button id="createSet">Tạo tập</button></div><p id="setInfo" class="muted"></p><div id="setItems"></div><button id="exportSet" disabled>Xuất manifest JSONL</button><button id="checkExport" disabled>Kiểm tra bản xuất / tải</button></section>
+  <div id="results"></div><button id="nextPage" disabled>Trang tiếp</button>
+  <details><summary>Indexing dành cho Engineer / Admin</summary><label for="manifest">Manifest nguồn đã được đăng ký</label><textarea id="manifest" placeholder='{"source_id":"...","dataset_version":"...","videos":[...]}'></textarea><button id="queueIndex">Đưa vào hàng đợi</button><label for="jobId">Mã job</label><input id="jobId"><button id="checkJob">Xem tiến độ</button><button data-action="pause">Tạm dừng</button><button data-action="resume">Tiếp tục</button><button data-action="retry">Thử lại</button><button data-action="cancel">Hủy</button><p id="jobInfo" class="muted"></p>
+    <label for="indexVersion">Phiên bản index cần kiểm tra / kích hoạt</label><input id="indexVersion"><button id="validateIndex">Kiểm tra dữ liệu</button><button id="publishIndex">Kích hoạt index</button>
+    <label for="rollbackVersion">Phiên bản cần quay về (để trống để tắt active index)</label><input id="rollbackVersion"><button id="rollbackIndex">Quay về phiên bản này</button><pre id="validationInfo"></pre>
+  </details>
+<script>
+  const $=id=>document.getElementById(id);
+  let session=null, run=null, nextCursor=null, resultSet=null, exportJob=null, mediaUrls=[];
+  async function api(path,method='GET',body=null,headers={}){
+    const token=$('token').value.trim();
+    const response=await fetch('/api/v1'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...headers},body:body?JSON.stringify(body):null});
+    const value=await response.json();
+    if(!response.ok)throw Error(value.error_code?value.error_code+': '+value.message:JSON.stringify(value.detail||value));
+    return value;
+  }
+  function showError(error){$('message').textContent=error.message;}
+  function guarded(fn){return async()=>{try{$('message').textContent='';await fn();}catch(error){showError(error);}};}
+  function remember(){localStorage.setItem('driveretriever-session',JSON.stringify({sessionId:session?.session_id,runId:run?.run_id}));}
+  function sessionInfo(){
+    $('sessionInfo').textContent='Phiên '+session.session_id+' · Index '+session.index_version;
+    $('sessionId').value=session.session_id;$('cameraFilter').disabled=!session.capabilities?.camera;
+    $('index').disabled=true;
+  }
+  async function search(){
+    if(!session){session=await api('/search-sessions','POST',{title:$('query').value,index_id:$('index').value});sessionInfo();}
+    const filters={};if($('videoFilter').value.trim())filters.video_ids=[$('videoFilter').value.trim()];
+    if(!$('cameraFilter').disabled&&$('cameraFilter').value.trim())filters.camera_ids=[$('cameraFilter').value.trim()];
+    const page=await api('/search-sessions/'+session.session_id+'/runs','POST',{index_id:session.index_id,request_key:crypto.randomUUID(),query_text:$('query').value,filters,page_size:20});
+    render(page);remember();
+  }
+  $('searchForm').onsubmit=event=>{event.preventDefault();guarded(search)();};
+  $('newSession').onclick=()=>{session=null;run=null;nextCursor=null;$('index').disabled=false;$('sessionInfo').textContent='';$('results').replaceChildren();$('nextPage').disabled=true;};
+  $('reopen').onclick=guarded(async()=>{session=await api('/search-sessions/'+encodeURIComponent($('sessionId').value));sessionInfo();render(await api('/search-runs/'+encodeURIComponent($('runId').value)+'/results'));remember();});
+  $('nextPage').onclick=guarded(async()=>render(await api('/search-runs/'+run.run_id+'/results?cursor='+encodeURIComponent(nextCursor))));
+  function element(tag,text){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;return el;}
+  function button(text,handler){const el=element('button',text);el.onclick=guarded(handler);return el;}
+  function render(page){
+    run=page.run;nextCursor=page.next_cursor;$('runId').value=run.run_id;$('nextPage').disabled=!nextCursor;
+    mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];$('results').replaceChildren();
+    if(run.status!=='completed'){$('message').textContent='Lượt tìm kiếm: '+run.status;return;}
+    if(!page.results.length)$('results').append(element('p','Không có kết quả được phép xem trong trang này.'));
+    for(const result of page.results){
+      const card=element('article');card.append(element('h2',result.video_id+' · '+(result.start_ms/1000).toFixed(2)+'–'+(result.end_ms/1000).toFixed(2)+' giây'));
+      card.append(element('p','Độ tương đồng: '+result.vector_score.toFixed(3)+(result.partial?' · Cửa sổ cuối ngắn hơn 10 giây':'')));
+      card.append(element('p','Trạng thái review: '+result.review_status));
+      const player=element('video');player.controls=true;player.preload='metadata';card.append(player);
+      card.append(button('Xem video nguồn',async()=>{
+        const grant=await api('/search-results/'+result.result_id+'/preview-url','POST');
+        const token=$('token').value.trim();
+        if(token){const response=await fetch(grant.url,{headers:{Authorization:'Bearer '+token}});if(!response.ok)throw Error('Không được phép xem nguồn');const url=URL.createObjectURL(await response.blob());mediaUrls.push(url);player.src=url;}else player.src=grant.url;
+        player.onloadedmetadata=()=>{player.currentTime=grant.anchor_ms/1000;};
+      }));
+      const range=element('div');range.className='row';const start=element('input'),end=element('input');
+      for(const input of [start,end]){input.type='number';input.step='.001';input.min=result.start_ms/1000;input.max=result.end_ms/1000;}
+      start.value=(result.review_range?.start_ms??result.start_ms)/1000;end.value=(result.review_range?.end_ms??result.end_ms)/1000;
+      for(const [label,input] of [['Bắt đầu đã xem (giây)',start],['Kết thúc đã xem (giây)',end]]){const wrapper=element('label',label);wrapper.append(input);range.append(wrapper);}card.append(range);
+      const note=element('input');note.placeholder='Ghi chú review';note.value=result.review_note||'';card.append(note);
+      for(const [text,status] of [['Xác nhận phù hợp','relevant'],['Không phù hợp','not_relevant']])card.append(button(text,async()=>{
+        await api('/search-results/'+result.result_id+'/review','PUT',{status,expected_version:result.version,subject_version:result.subject_version,start_ms:Number(start.value)*1000,end_ms:Number(end.value)*1000,note:note.value,request_id:crypto.randomUUID()});
+        render(await api('/search-runs/'+run.run_id+'/results'));if(resultSet){resultSet=await api('/result-sets/'+resultSet.result_set_id);renderSet();}
+      }));
+      const add=button('Thêm vào tập',async()=>{if(!resultSet)throw Error('Tạo tập kết quả trước');resultSet=await api('/result-sets/'+resultSet.result_set_id+'/items/'+result.result_id,'PUT',{expected_version:resultSet.version});renderSet();});add.disabled=result.review_status!=='relevant';card.append(add);
+      $('results').append(card);
+    }
+  }
+  function renderSet(){
+    $('setInfo').textContent=resultSet.name+' · '+resultSet.items.length+' cảnh · phiên bản '+resultSet.version;
+    $('setItems').replaceChildren();for(const item of resultSet.items){const row=element('p',item.scene_id+' ');row.append(button('Xóa',async()=>{resultSet=await api('/result-sets/'+resultSet.result_set_id+'/items/'+item.result_id,'DELETE',{expected_version:resultSet.version});renderSet();}));$('setItems').append(row);}
+    $('exportSet').disabled=!resultSet.items.length;
+  }
+  $('createSet').onclick=guarded(async()=>{resultSet=await api('/result-sets','POST',{name:$('setName').value});renderSet();});
+  $('exportSet').onclick=guarded(async()=>{exportJob=await api('/exports','POST',{result_set_id:resultSet.result_set_id,expected_version:resultSet.version,config:{format:'manifest_only',manifest_format:'jsonl'}},{'Idempotency-Key':crypto.randomUUID()});$('checkExport').disabled=false;$('message').textContent='Bản xuất đang chờ worker: '+exportJob.job_id;});
+  $('checkExport').onclick=guarded(async()=>{
+    exportJob=await api('/exports/'+exportJob.job_id);if(exportJob.status!=='completed'){$('message').textContent='Bản xuất: '+exportJob.status;return;}
+    const grant=await api('/exports/'+exportJob.job_id+'/download','POST');const token=$('token').value.trim();
+    const response=await fetch(grant.url,{headers:token?{Authorization:'Bearer '+token}:{}});if(!response.ok)throw Error('Bản xuất không còn được phép tải');
+    const url=URL.createObjectURL(await response.blob()),a=element('a');a.href=url;a.download='manifest.jsonl';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+  $('queueIndex').onclick=guarded(async()=>{const job=await api('/indexing/jobs','POST',{manifest:JSON.parse($('manifest').value)},{'Idempotency-Key':crypto.randomUUID()});$('jobId').value=job.job_id;$('indexVersion').value=job.index_version;$('jobInfo').textContent=job.status+' · '+job.processed_items+'/'+job.total_items+' cửa sổ';});
+  $('checkJob').onclick=guarded(async()=>{const job=await api('/indexing/jobs/'+encodeURIComponent($('jobId').value));$('indexVersion').value=job.index_version;$('jobInfo').textContent=job.status+' · '+job.processed_items+'/'+job.total_items+' cửa sổ';});
+  document.querySelectorAll('[data-action]').forEach(button=>button.onclick=guarded(async()=>{await api('/indexing/jobs/'+encodeURIComponent($('jobId').value)+'/'+button.dataset.action,'POST');$('checkJob').click();}));
+  $('validateIndex').onclick=guarded(async()=>{const report=await api('/indexing/validate','POST',{index_version:$('indexVersion').value.trim()});$('validationInfo').textContent=JSON.stringify(report,null,2);});
+  $('publishIndex').onclick=guarded(async()=>{const value=await api('/indexing/publish','POST',{index_version:$('indexVersion').value.trim()});$('rollbackVersion').value=value.previous_index_version||'';$('jobInfo').textContent='Đã kích hoạt '+value.published;});
+  $('rollbackIndex').onclick=guarded(async()=>{const value=await api('/indexing/rollback','POST',{index_version:$('rollbackVersion').value.trim()||null});$('jobInfo').textContent=value.active?'Đã quay về '+value.active:'Đã tắt active index';});
+  try{const saved=JSON.parse(localStorage.getItem('driveretriever-session')||'{}');$('sessionId').value=saved.sessionId||'';$('runId').value=saved.runId||'';}catch{}
+</script>
+</body>
+</html>

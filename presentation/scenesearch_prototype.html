@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090d16">
+  <title>SceneSearch — Tìm kiếm cảnh video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/scenesearch.css">
+  <script type="module" src="assets/js/app.js?v=8"></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M3 8h18"/></symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="icon-video" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m10 8 6 4-6 4Z"/></symbol>
+    <symbol id="icon-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/></symbol>
+    <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  </svg>
+  <a class="skip-link" href="#workspace">Đến nội dung chính</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="SceneSearch, trang demo"><span class="brand-icon"><svg class="icon"><use href="#icon-video"/></svg></span><span>SceneSearch</span><span class="badge-code">RAV-14</span></a>
+    <div class="header-actions"><span class="demo-label"><span class="status-dot"></span>Phiên demo</span><a class="button button-secondary login-link" href="/ui/login.html">Đăng nhập <svg class="icon"><use href="#icon-arrow"/></svg></a></div>
+  </header>
+  <main class="app-layout">
+    <aside class="sidebar" aria-label="Điều hướng và hướng dẫn">
+      <nav class="panel nav-panel" aria-label="Không gian làm việc">
+        <h2 class="panel-label">Không gian làm việc</h2>
+        <a class="nav-link active" href="#search-panel"><svg class="icon"><use href="#icon-search"/></svg>Tìm kiếm cảnh</a>
+        <a class="nav-link" href="#data-panel"><svg class="icon"><use href="#icon-folder"/></svg>Dữ liệu video</a>
+        <a class="nav-link" href="#results-panel"><svg class="icon"><use href="#icon-video"/></svg>Kết quả tìm kiếm<span class="nav-count" id="nav-count">0</span></a>
+      </nav>
+      <section class="panel guide-panel">
+        <h2 class="panel-label">Bắt đầu trong 3 bước</h2>
+        <ol class="workflow-steps">
+          <li id="step-upload" class="current"><span class="step-number">1</span><div><strong>Tải folder video</strong><p>Chọn video từ máy của bạn.</p></div></li>
+          <li id="step-embed"><span class="step-number">2</span><div><strong>Chuẩn bị dữ liệu</strong><p>Bắt đầu embedding và chờ xử lý.</p></div></li>
+          <li id="step-search"><span class="step-number">3</span><div><strong>Tìm và xem cảnh</strong><p>Mô tả cảnh, phát video tại kết quả.</p></div></li>
+        </ol>
+      </section>
+      <section class="panel filter-panel">
+        <h2 class="panel-label">Bộ lọc bổ sung<span class="small-badge">Chưa có dữ liệu</span></h2>
+        <fieldset id="weather-filters" disabled aria-describedby="filter-note"><legend>Thời tiết</legend><div class="filter-pills">
+          <label><input type="checkbox" name="weather" value="clear"><span>Trời quang</span></label>
+          <label><input type="checkbox" name="weather" value="cloudy"><span>Nhiều mây</span></label>
+          <label><input type="checkbox" name="weather" value="rain"><span>Mưa</span></label>
+          <label><input type="checkbox" name="weather" value="fog"><span>Sương mù</span></label>
+          <label><input type="checkbox" name="weather" value="unknown"><span>Không xác định</span></label>
+        </div></fieldset>
+        <fieldset id="lighting-filters" disabled aria-describedby="filter-note"><legend>Ngày/đêm</legend><div class="filter-pills">
+          <label><input type="checkbox" name="lighting" value="day"><span>Ban ngày</span></label>
+          <label><input type="checkbox" name="lighting" value="night"><span>Ban đêm</span></label>
+          <label><input type="checkbox" name="lighting" value="unknown"><span>Không xác định</span></label>
+        </div></fieldset>
+        <button id="clear-filters" class="button button-secondary" type="button" disabled>Bỏ lọc</button>
+        <p id="filter-note" class="subtle-text filter-note" role="status">Bộ dữ liệu này chưa có metadata thời tiết và ngày/đêm. Bạn vẫn có thể tìm bằng mô tả.</p>
+      </section>
+      <div class="sidebar-foot"><span class="status-dot"></span>Video của bạn · Tìm kiếm bằng mô tả</div>
+    </aside>
+    <div class="workspace" id="workspace">
+      <div class="page-heading"><div><p class="eyebrow">KHÔNG GIAN TÌM KIẾM VIDEO</p><h1>Tìm kiếm cảnh video</h1><p class="muted-text">Từ một folder video đến đúng khoảnh khắc bạn cần.</p></div><span class="heading-mark" aria-hidden="true"><svg class="icon"><use href="#icon-spark"/></svg></span></div>
+      <section class="panel data-panel" id="data-panel" aria-labelledby="data-title">
+        <div class="section-heading"><h2 id="data-title"><svg class="icon"><use href="#icon-folder"/></svg>Dữ liệu video</h2><span id="dataset-badge" class="status-badge">Chưa chọn folder</span></div>
+        <div class="data-actions">
+          <div class="action-block"><span class="action-icon"><svg class="icon"><use href="#icon-upload"/></svg></span><div class="action-content"><div style="display: flex; gap: 8px; flex-wrap: wrap;"><button class="button button-upload" id="upload-button" disabled><svg class="icon"><use href="#icon-folder"/></svg>Tải folder video</button><button class="button button-secondary" id="upload-files-button" disabled style="display: inline-flex; align-items: center; gap: 6px;"><svg class="icon"><use href="#icon-video"/></svg>Tải video lẻ</button></div><p id="upload-limit" class="subtle-text">Đang kiểm tra giới hạn tải…</p><input type="file" id="folder-input" webkitdirectory multiple hidden><input type="file" id="files-input" multiple hidden><p id="folder-fallback" class="subtle-text" hidden>Trình duyệt này chỉ hỗ trợ chọn nhiều video.</p></div></div>
+          <div class="action-block embed-block"><span class="action-icon"><svg class="icon"><use href="#icon-spark"/></svg></span><div class="action-content"><button class="button button-primary" id="embed-button" disabled><svg class="icon"><use href="#icon-spark"/></svg><span id="embed-label">Bắt đầu embedding</span></button><p class="subtle-text">Xử lý video để có thể tìm cảnh bằng mô tả.</p></div></div>
+        </div>
+        <div class="dataset-summary" id="dataset-summary"><svg class="icon"><use href="#icon-info"/></svg><div><strong id="folder-name">Chưa có video nào được tải lên</strong><p id="folder-summary" class="subtle-text">Chọn folder hoặc một/nhiều video lẻ để bắt đầu.</p></div></div>
+        <div id="dataset-picker-wrap" style="margin-top: 14px; margin-bottom: 14px; background: rgba(30, 41, 59, 0.4); border: 1px solid #28354b; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;" hidden>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg class="icon" style="color: #6366f1;"><use href="#icon-video"/></svg>
+            <span style="font-weight: 600; font-size: 14px;">Kho video đã lưu trữ:</span>
+          </div>
+          <select id="dataset-select" style="flex: 1; min-width: 250px; padding: 8px 12px; background: #090d16; border: 1px solid #3b82f6; color: #f9fafb; border-radius: 6px; font-family: inherit; font-size: 13px; cursor: pointer;">
+          </select>
+          <div id="dataset-actions" style="display: flex; gap: 8px;">
+            <button id="delete-dataset-btn" class="button button-secondary" type="button" style="padding: 6px 12px; font-size: 13px; color: #f87171; border-color: rgba(248,113,113,0.3);" title="Xóa video đang chọn">Xóa video này</button>
+            <button id="delete-all-datasets-btn" class="button button-secondary" type="button" style="padding: 6px 12px; font-size: 13px; color: #ef4444; border-color: rgba(239,68,68,0.4);" title="Xóa toàn bộ kho video">Xóa tất cả</button>
+          </div>
+        </div>
+        <div class="progress-region" id="progress-region" hidden><div class="progress-heading"><span id="progress-title">Đang tải video</span><span class="mono" id="progress-count"></span></div><progress id="dataset-progress" max="1" value="0" aria-label="Tiến độ xử lý"></progress></div>
+        <p class="status-message" id="data-status" role="status" aria-live="polite">Đang kết nối với máy chủ…</p>
+        <div class="recovery-actions" id="recovery-actions" hidden><button id="resume-upload" class="button button-secondary" type="button">Chọn lại folder để tải tiếp</button><button id="retry-upload" class="button button-secondary" type="button">Thử lại các file lỗi</button><button id="retry-job" class="button button-secondary" type="button">Thử lại xử lý</button></div>
+        <details id="file-details" hidden><summary>Danh sách video <span id="file-count"></span></summary><ul class="file-list" id="file-list"></ul></details>
+      </section>
+      <section class="panel search-panel" id="search-panel" aria-labelledby="query-label">
+        <form id="search-form"><label id="query-label" for="query">Mô tả cảnh cần tìm</label><div class="search-input-row"><div class="query-field"><svg class="icon"><use href="#icon-search"/></svg><input id="query" name="query" type="text" maxlength="1000" placeholder="Ví dụ: a pedestrian crossing the road in the rain" autocomplete="off"></div><button class="button button-primary search-button" id="search-button" type="submit" disabled><svg class="icon"><use href="#icon-search"/></svg><span id="search-label">Tìm kiếm</span></button></div><div class="search-footnote"><p id="search-hint">Bạn có thể nhập mô tả trước khi dữ liệu sẵn sàng.</p><span class="keyboard-hint"><kbd>Enter</kbd> để tìm kiếm</span></div></form>
+        <p id="search-status" class="status-message" role="status" aria-live="polite" hidden></p>
+      </section>
+      <section class="results-section" id="results-panel" aria-labelledby="results-title" aria-busy="false">
+        <div class="results-heading"><h2 id="results-title">Kết quả tìm kiếm <span id="results-count" class="count-badge">0</span></h2><span class="subtle-text" id="results-note">Xem video ngay tại mỗi kết quả</span></div>
+        <div class="empty-state panel" id="empty-state"><div class="empty-art" aria-hidden="true"><span class="art-orbit"></span><svg class="icon"><use href="#icon-video"/></svg><span class="art-search"><svg class="icon"><use href="#icon-search"/></svg></span></div><h3 id="empty-title">Cảnh bạn cần tìm sẽ xuất hiện ở đây</h3><p id="empty-description">Tải folder video, chuẩn bị dữ liệu và nhập mô tả.<br>SceneSearch sẽ đưa bạn đến đúng đoạn video.</p><div class="empty-steps" aria-hidden="true"><span>01 <span>Tải video</span></span><svg class="icon"><use href="#icon-arrow"/></svg><span>02 <span>Embedding</span></span><svg class="icon"><use href="#icon-arrow"/></svg><span>03 <span>Tìm cảnh</span></span></div></div>
+        <div id="results-list" class="results-list"></div><div class="load-more-wrap"><button class="button button-secondary" id="load-more" type="button" hidden>Xem thêm</button></div>
+      </section>
+      <footer class="workspace-foot">SceneSearch <span>·</span> Tìm kiếm theo nội dung video <span class="foot-right">RAV-14 / DEMO</span></footer>
+    </div>
+  </main>
+  <noscript><p class="noscript-notice">Vui lòng bật JavaScript để tải video và tìm kiếm.</p></noscript>
+</body>
+</html>
