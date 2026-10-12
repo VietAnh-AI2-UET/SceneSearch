@@ -6,10 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.api.hybrid_routes import router as hybrid_router
 from src.api.indexing_routes import router as indexing_router
 from src.api.retrieval_routes import router as retrieval_router
-from src.api.routes import router
 from src.api.upload_routes import router as upload_router
 from src.config import get_settings
 from src.retrieval.domain.errors import RetrievalError
@@ -56,11 +54,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix="/api/v1")
 app.include_router(indexing_router, prefix="/api/v1")
 app.include_router(retrieval_router, prefix="/api/v1")
 app.include_router(upload_router, prefix="/api/v1")
-app.include_router(hybrid_router, prefix="/api/v1")
 
 # Mount UI/UX Prototype & RBAC Dashboard
 app.mount("/ui", StaticFiles(directory="presentation", html=True), name="ui")

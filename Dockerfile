@@ -1,38 +1,38 @@
-# ---- Stage 1: Build ----
-FROM python:3.11-slim AS builder
-
+FROM python:3.11-slim-bookworm AS builder
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./
+# Install CPU wheels first; plain PyPI wheels on Linux may include CUDA dependencies.
+RUN python -m pip install --no-cache-dir "torch>=2.3.0" "torchvision>=0.18.0" \
+        --index-url https://download.pytorch.org/whl/cpu \
+    && python -m pip install --no-cache-dir -r requirements.txt \
+    && python -m pip check \
+    && python -c "import torch; assert torch.version.cuda is None, 'CPU build required'"
 
-# ---- Stage 2: Production ----
-FROM python:3.11-slim
-
+FROM python:3.11-slim-bookworm
 WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8000 \
+    APP_ENV=development \
+    INDEXING_CONFIG=configs/indexing/local.yaml \
+    RETRIEVAL_CONFIG=configs/retrieval/local.yaml \
+    HF_HOME=/app/data/model-cache/huggingface-home
 
-# Copy installed packages from builder
-COPY --from=builder /usr/local /usr/local
-
-# Clip export and media validation use argument-list invocations of these tools.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Security: run as non-root user
-RUN useradd -m appuser
-
-# Copy application code
-COPY . .
-
-# Create data directory with correct ownership
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 1000 --create-home appuser \
+    && mkdir -p /app/data \
+    && chown appuser:appuser /app/data
+COPY --from=builder /usr/local /usr/local
+# Explicit copies keep local secrets, recordings and development tools out of the image.
+COPY src ./src
+COPY configs ./configs
+COPY presentation ./presentation
+COPY migrations ./migrations
+COPY requirements.lock ./requirements.lock
 
 USER appuser
-
 EXPOSE 8000
-
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
