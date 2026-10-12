@@ -1,5 +1,0 @@
-# Additional inference dependencies; preserve existing CUDA torch/torchvision.
-# Existing environment supplies torch, transformers, NumPy, OpenCV, requests,
-# huggingface_hub, safetensors, Pillow, tqdm and pytest.
-ultralytics>=8.3
-lap>=0.5.12
